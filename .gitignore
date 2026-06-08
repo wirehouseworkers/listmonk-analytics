@@ -1,0 +1,21 @@
+# Binaries
+/listmonk-analytics
+*.exe
+*.out
+
+# Env / secrets — NEVER commit a real DATABASE_URL
+.env
+.env.local
+*.local
+
+# Go
+/vendor/
+*.test
+*.prof
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
