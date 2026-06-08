@@ -59,15 +59,35 @@ postgresql://analytics_ro:<readonly_pw>@<host>.proxy.rlwy.net:<port>/railway
 - If it does appear: stop. The ignore rule failed; fix before continuing.
 
 ### Step 6 — Verify the connection works and is read-only
-This is the gate before S02. Done via Claude Code with a throwaway check
-(Claude Code reads `.env`, attempts a SELECT, then attempts a write that must
-fail). The exact Claude Code instruction for this is issued when we reach this
-step — not before.
+This is the gate before S02. Done via Claude Code with a throwaway check that
+leaves no committed files. The instruction MUST include connection-target
+verification and explicit failure handling (not diagnosis-by-guess).
+
+Claude Code instruction (issue when reaching this step):
+
+```
+S01b connection verification — write NO project code, leave NO committed files.
+
+1. Read DATABASE_URL fresh from .env (do not use any cached/hardcoded value).
+2. BEFORE connecting, echo back the host, port, user, and database you parsed
+   from DATABASE_URL (NEVER the password). Stop and show me these.
+3. Open a connection and run: SELECT count(*) FROM campaigns;  Report the number.
+4. Attempt a write that must fail: CREATE TEMP TABLE _probe_test (x int);
+   Report whether it was rejected.
+
+If the connection fails at any point: report the EXACT host:port you attempted
+and the raw error text. Do NOT speculate about the cause (e.g. "database is
+stopped") — just report target + error so we can compare against the expected
+host. Delete any throwaway files. Do not start S02.
+```
 
 Expected result:
-- A simple SELECT (e.g. `SELECT count(*) FROM campaigns`) succeeds.
-- A write attempt (e.g. `CREATE TEMP TABLE` or `INSERT`) is rejected by the
-  read-only role / read-only transaction.
+- Echoed host/port matches the current TCP proxy (verify before trusting checks).
+- `SELECT count(*) FROM campaigns` succeeds and returns a number.
+- The write attempt is rejected by the read-only role / read-only transaction.
+
+**Common failure:** echoed host/port does not match the live Railway TCP proxy
+(proxy host/port change when regenerated). Fix `.env`, re-run.
 
 ---
 
