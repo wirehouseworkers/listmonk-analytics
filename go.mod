@@ -1,4 +1,4 @@
-module github.com/monk-addons/listmonk-analytics
+module github.com/wirehouseworkers/listmonk-analytics
 
 go 1.22
 
