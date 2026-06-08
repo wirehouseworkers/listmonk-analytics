@@ -44,6 +44,9 @@ func (s *Server) routes() {
 	// Health is never behind auth (load balancers and Railway need it).
 	s.mux.HandleFunc("GET /health", s.handleHealth)
 
+	// Metric endpoints — auth-gated when credentials are configured.
+	s.mux.Handle("GET /api/campaigns", s.withAuth(http.HandlerFunc(s.handleCampaigns)))
+
 	// Static shell — auth-gated when credentials are configured.
 	sub, _ := fs.Sub(s.static, "web/static")
 	s.mux.Handle("/", s.withAuth(http.FileServer(http.FS(sub))))
