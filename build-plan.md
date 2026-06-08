@@ -116,8 +116,9 @@ Model: Light · Budget: small-medium · Reconcile: deploy smoke test
 
 **S16 — README + LICENSE (MIT) + .env.example**
 Setup contract, read-only role steps, env vars, screenshots, donation note.
-GitHub home decided here (`monk24215` vs `wirehouseworkers`) — set module path
-+ links accordingly.
+GitHub home: **`wirehouseworkers/listmonk-analytics`** (decided). Module path is
+`github.com/wirehouseworkers/listmonk-analytics` (already set in `go.mod`); set
+README links and clone URLs accordingly.
 Model: Light · Budget: medium · Reconcile: n/a
 
 ---
