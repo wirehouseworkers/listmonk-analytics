@@ -46,6 +46,7 @@ func (s *Server) routes() {
 
 	// Metric endpoints — auth-gated when credentials are configured.
 	s.mux.Handle("GET /api/campaigns", s.withAuth(http.HandlerFunc(s.handleCampaigns)))
+	s.mux.Handle("GET /api/campaigns/{id}/opens", s.withAuth(http.HandlerFunc(s.handleCampaignOpens)))
 
 	// Static shell — auth-gated when credentials are configured.
 	sub, _ := fs.Sub(s.static, "web/static")

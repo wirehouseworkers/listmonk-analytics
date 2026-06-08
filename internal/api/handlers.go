@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/wirehouseworkers/listmonk-analytics/internal/db"
 )
@@ -39,6 +40,30 @@ func (s *Server) handleCampaigns(w http.ResponseWriter, r *http.Request) {
 		rows = []db.CampaignRow{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"campaigns": rows})
+}
+
+// handleCampaignOpens serves metric #1 (open rate + diagnostics) for one
+// campaign. Path: /api/campaigns/{id}/opens. Query param include_optin=true
+// allows requesting an optin campaign (excluded by default).
+func (s *Server) handleCampaignOpens(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid campaign id", http.StatusBadRequest)
+		return
+	}
+	includeOptin := r.URL.Query().Get("include_optin") == "true"
+
+	m, err := s.db.CampaignOpenMetrics(r.Context(), id, includeOptin)
+	if err != nil {
+		if errors.Is(err, db.ErrCampaignNotFound) {
+			http.Error(w, "campaign not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, m)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
