@@ -205,6 +205,65 @@ func (s *Server) handleListActiveCounts(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, c)
 }
 
+// handleSubscriberEngagement serves metric #8: the subscriber engagement
+// leaderboard. Path: /api/subscribers/engagement. Query params: window (days,
+// default config ENGAGED_WINDOW_DAYS), limit, offset.
+//
+// HARD GATE (auth/PII): this exposes subscriber email/name. It refuses to serve
+// when no dashboard credentials are configured, because serving PII on an
+// unauthenticated endpoint is unsafe. When credentials ARE set, withAuth has
+// already enforced basic auth before this handler runs. (The IndividualTracking
+// hard gate is enforced in the db layer.)
+func (s *Server) handleSubscriberEngagement(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.DashboardUser == "" || s.cfg.DashboardPass == "" {
+		writeJSON(w, http.StatusForbidden, map[string]any{
+			"individual_tracking": s.db.Caps.IndividualTracking,
+			"subscribers":         []any{},
+			"note": "subscriber engagement requires authentication to be enabled " +
+				"(set DASHBOARD_USER and DASHBOARD_PASS); refusing to serve subscriber PII on an unauthenticated endpoint",
+		})
+		return
+	}
+
+	q := r.URL.Query()
+	window := s.cfg.EngagedWindowDays
+	if raw := q.Get("window"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n <= 0 {
+			http.Error(w, "invalid window", http.StatusBadRequest)
+			return
+		}
+		window = n
+	}
+	limit, err := atoiDefault(q.Get("limit"), 0)
+	if err != nil {
+		http.Error(w, "invalid limit", http.StatusBadRequest)
+		return
+	}
+	offset, err := atoiDefault(q.Get("offset"), 0)
+	if err != nil {
+		http.Error(w, "invalid offset", http.StatusBadRequest)
+		return
+	}
+
+	res, err := s.db.SubscriberEngagement(r.Context(), window, limit, offset)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
+}
+
+// atoiDefault parses s, returning def when s is empty. A non-empty, non-integer
+// value is an error.
+func atoiDefault(s string, def int) (int, error) {
+	if s == "" {
+		return def, nil
+	}
+	return strconv.Atoi(s)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
