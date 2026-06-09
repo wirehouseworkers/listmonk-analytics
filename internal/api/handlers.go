@@ -114,6 +114,30 @@ func (s *Server) handleCampaignLinks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
+// handleCampaignCurve serves metric #4 (engagement curve) for one campaign.
+// Path: /api/campaigns/{id}/curve. Query param include_optin=true allows
+// requesting an optin campaign (excluded by default).
+func (s *Server) handleCampaignCurve(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid campaign id", http.StatusBadRequest)
+		return
+	}
+	includeOptin := r.URL.Query().Get("include_optin") == "true"
+
+	m, err := s.db.CampaignEngagementCurve(r.Context(), id, includeOptin)
+	if err != nil {
+		if errors.Is(err, db.ErrCampaignNotFound) {
+			http.Error(w, "campaign not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, m)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -49,6 +49,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/campaigns/{id}/opens", s.withAuth(http.HandlerFunc(s.handleCampaignOpens)))
 	s.mux.Handle("GET /api/campaigns/{id}/clicks", s.withAuth(http.HandlerFunc(s.handleCampaignClicks)))
 	s.mux.Handle("GET /api/campaigns/{id}/links", s.withAuth(http.HandlerFunc(s.handleCampaignLinks)))
+	s.mux.Handle("GET /api/campaigns/{id}/curve", s.withAuth(http.HandlerFunc(s.handleCampaignCurve)))
 
 	// Static shell — auth-gated when credentials are configured.
 	sub, _ := fs.Sub(s.static, "web/static")
