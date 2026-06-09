@@ -283,33 +283,42 @@
     var m = h.match(/^#\/c\/(\d+)/);
     if (m) return { view: 'detail', id: parseInt(m[1], 10) };
     if (h === '#/lists') return { view: 'lists' };
+    if (h === '#/subscribers') return { view: 'subscribers' };
     return { view: 'overview' };
+  }
+
+  function showOnly(viewId) {
+    ['view-overview', 'view-detail', 'view-lists', 'view-subscribers'].forEach(function(id) {
+      el(id).hidden = (id !== viewId);
+    });
   }
 
   function route() {
     var r = currentRoute();
-    el('nav-overview').classList.remove('is-active');
-    el('nav-lists').classList.remove('is-active');
+    ['nav-overview', 'nav-lists', 'nav-subscribers'].forEach(function(id) {
+      el(id).classList.remove('is-active');
+    });
 
     if (r.view === 'detail') {
-      el('view-overview').hidden = true;
-      el('view-lists').hidden = true;
-      el('view-detail').hidden = false;
+      showOnly('view-detail');
       window.scrollTo(0, 0);
       loadDetail(r.id);
     } else if (r.view === 'lists') {
-      el('view-overview').hidden = true;
-      el('view-detail').hidden = true;
-      el('view-lists').hidden = false;
+      showOnly('view-lists');
       el('nav-lists').classList.add('is-active');
       el('topbar-meta').textContent = '';
       destroyChart();
       window.scrollTo(0, 0);
       loadListsView();
+    } else if (r.view === 'subscribers') {
+      showOnly('view-subscribers');
+      el('nav-subscribers').classList.add('is-active');
+      el('topbar-meta').textContent = '';
+      destroyChart();
+      window.scrollTo(0, 0);
+      loadSubsView();
     } else {
-      el('view-detail').hidden = true;
-      el('view-lists').hidden = true;
-      el('view-overview').hidden = false;
+      showOnly('view-overview');
       el('nav-overview').classList.add('is-active');
       el('topbar-meta').textContent = overviewMeta;
       destroyChart();
@@ -708,6 +717,140 @@
       }
     });
   }
+
+  // =====================================================================
+  //  SUBSCRIBERS VIEW
+  // =====================================================================
+  var subPageSize = 50;
+  var subOffset = 0;
+
+  // Unlike fetchJSON, this reads the response body on 403 (PII gate) and
+  // tags it rather than throwing, so we can surface the note to the user.
+  function fetchEngagement(offset) {
+    var url = '/api/subscribers/engagement?limit=' + subPageSize + '&offset=' + offset;
+    return fetch(url, { headers: { 'Accept': 'application/json' } })
+      .then(function (res) {
+        return res.json().then(function (body) {
+          if (res.status === 403) { body._piiGated = true; return body; }
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return body;
+        });
+      });
+  }
+
+  function loadSubsView() {
+    subOffset = 0;
+    fetchSubPage();
+  }
+
+  function fetchSubPage() {
+    el('sub-loading').hidden = false;
+    el('sub-gate').hidden = true;
+    el('sub-empty').hidden = true;
+    el('sub-wrap').hidden = true;
+    el('sub-pager').hidden = true;
+    el('sub-note').textContent = '';
+
+    fetchEngagement(subOffset)
+      .then(function (data) {
+        el('sub-loading').hidden = true;
+        renderSubsTable(data);
+      })
+      .catch(function (err) {
+        el('sub-loading').hidden = true;
+        el('sub-empty').hidden = false;
+        el('sub-empty').textContent = 'Could not load subscribers: ' + err.message;
+      });
+  }
+
+  function renderSubsTable(data) {
+    // 403: auth not configured — PII gate
+    if (data._piiGated) {
+      var gate = el('sub-gate');
+      gate.hidden = false;
+      gate.innerHTML = '<strong>Dashboard authentication required.</strong> ' +
+        (data.note ||
+          'Subscriber engagement requires DASHBOARD_USER and DASHBOARD_PASS to be configured — ' +
+          'this endpoint is blocked on unauthenticated instances to protect subscriber PII.');
+      return;
+    }
+
+    // Individual tracking off — no subscriber_id to score by
+    if (!data.individual_tracking) {
+      el('sub-empty').hidden = false;
+      el('sub-empty').textContent = data.note ||
+        'Subscriber engagement unavailable — individual tracking is off.';
+      return;
+    }
+
+    var rows = (data && data.subscribers) || [];
+    el('sub-note').textContent = 'last ' + fmtInt(data.window_days) + ' days';
+
+    if (!rows.length && subOffset === 0) {
+      el('sub-empty').hidden = false;
+      el('sub-empty').textContent = 'No engagement recorded in the current window.';
+      return;
+    }
+
+    // Navigated past the last page — step back and reload
+    if (!rows.length) {
+      subOffset = Math.max(0, subOffset - subPageSize);
+      fetchSubPage();
+      return;
+    }
+
+    el('sub-wrap').hidden = false;
+    var body = el('sub-body');
+    body.innerHTML = '';
+    rows.forEach(function (s, i) {
+      var tr = document.createElement('tr');
+
+      tr.appendChild(numCell(fmtInt(subOffset + i + 1)));
+
+      var nameCell = document.createElement('td');
+      nameCell.className = 'name';
+      nameCell.textContent = s.email;
+      if (s.name) {
+        var nameSub = document.createElement('span');
+        nameSub.className = 'sub';
+        nameSub.textContent = s.name;
+        nameCell.appendChild(nameSub);
+      }
+      tr.appendChild(nameCell);
+
+      tr.appendChild(numCell(fmtInt(s.opens)));
+      tr.appendChild(numCell(fmtInt(s.clicks)));
+      tr.appendChild(numCell(fmtInt(s.frequency)));
+
+      var ls = document.createElement('td');
+      ls.textContent = fmtDateTime(s.last_seen);
+      tr.appendChild(ls);
+
+      tr.appendChild(numCell(s.score != null ? s.score.toFixed(1) : '—'));
+
+      body.appendChild(tr);
+    });
+
+    // Pagination controls
+    el('sub-pager').hidden = false;
+    el('sub-prev').disabled = subOffset === 0;
+    el('sub-next').disabled = rows.length < subPageSize;
+    el('sub-pager-info').textContent =
+      (subOffset + 1) + '–' + (subOffset + rows.length);
+  }
+
+  // Wire pagination buttons once — they reference subOffset/fetchSubPage by closure.
+  el('sub-prev').addEventListener('click', function () {
+    if (subOffset < subPageSize) return;
+    subOffset -= subPageSize;
+    fetchSubPage();
+    window.scrollTo(0, 0);
+  });
+  el('sub-next').addEventListener('click', function () {
+    subOffset += subPageSize;
+    fetchSubPage();
+    window.scrollTo(0, 0);
+  });
 
   // Keep no-serif rule inside the canvas too.
   if (window.Chart) {

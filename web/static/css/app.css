@@ -24,6 +24,9 @@
   --shadow: 0 1px 2px rgba(16, 19, 26, 0.04), 0 4px 16px rgba(16, 19, 26, 0.04);
 }
 
+/* Reinforce the HTML spec: [hidden] must never be overridden by display rules. */
+[hidden] { display: none !important; }
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -276,4 +279,38 @@ html, body {
   font-size: 0.79rem;
   color: var(--muted);
   max-width: 380px;
+}
+
+/* ---- Subscribers view (S14) ---- */
+.banner.gate {
+  border-color: #d9ddf7;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.sub-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.pager-btn {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--accent);
+  cursor: pointer;
+}
+.pager-btn:hover:not(:disabled) { background: var(--accent-soft); border-color: #d9ddf7; }
+.pager-btn:disabled { color: var(--faint); cursor: default; }
+.pager-info {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  flex: 1;
+  text-align: center;
 }

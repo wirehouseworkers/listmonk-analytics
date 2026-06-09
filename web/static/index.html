@@ -21,6 +21,7 @@
     <nav class="nav">
       <a class="nav-item" id="nav-overview" href="#/">Overview</a>
       <a class="nav-item" id="nav-lists" href="#/lists">Lists</a>
+      <a class="nav-item" id="nav-subscribers" href="#/subscribers">Subscribers</a>
     </nav>
     <div class="topbar-meta" id="topbar-meta"></div>
   </header>
@@ -156,6 +157,42 @@
             </thead>
             <tbody id="lists-body"></tbody>
           </table>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ==================== SUBSCRIBERS VIEW ==================== -->
+    <div id="view-subscribers" hidden>
+
+      <section class="panel" aria-label="Subscriber engagement">
+        <div class="panel-head">
+          <h2 class="panel-title">Subscriber engagement</h2>
+          <span class="panel-note" id="sub-note"></span>
+        </div>
+        <div class="state" id="sub-loading">Loading subscribers…</div>
+        <div class="banner gate" id="sub-gate" hidden></div>
+        <div class="state" id="sub-empty" hidden></div>
+        <div class="table-scroll" id="sub-wrap" hidden>
+          <table class="ctable">
+            <thead>
+              <tr>
+                <th class="num">#</th>
+                <th>Subscriber</th>
+                <th class="num">Opens</th>
+                <th class="num">Clicks</th>
+                <th class="num">Frequency</th>
+                <th>Last seen</th>
+                <th class="num">Score</th>
+              </tr>
+            </thead>
+            <tbody id="sub-body"></tbody>
+          </table>
+        </div>
+        <div class="sub-pager" id="sub-pager" hidden>
+          <button class="pager-btn" id="sub-prev">← Prev</button>
+          <span class="pager-info" id="sub-pager-info"></span>
+          <button class="pager-btn" id="sub-next">Next →</button>
         </div>
       </section>
 
