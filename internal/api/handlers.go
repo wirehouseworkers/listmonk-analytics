@@ -138,6 +138,44 @@ func (s *Server) handleCampaignCurve(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
+// handleCampaignBounces serves metric #5 per-campaign (soft/hard bounce counts
+// and bounce rate, plus complaints and complaint rate kept separate) for one
+// campaign. Path: /api/campaigns/{id}/bounces. Query param include_optin=true
+// allows requesting an optin campaign (excluded by default).
+func (s *Server) handleCampaignBounces(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid campaign id", http.StatusBadRequest)
+		return
+	}
+	includeOptin := r.URL.Query().Get("include_optin") == "true"
+
+	m, err := s.db.CampaignBounceMetrics(r.Context(), id, includeOptin)
+	if err != nil {
+		if errors.Is(err, db.ErrCampaignNotFound) {
+			http.Error(w, "campaign not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, m)
+}
+
+// handleBounceTrend serves metric #5 global trend: daily soft/hard/complaint
+// counts across all campaigns (including campaign-untied bounces).
+// Path: /api/bounces/trend.
+func (s *Server) handleBounceTrend(w http.ResponseWriter, r *http.Request) {
+	t, err := s.db.BounceTrend(r.Context())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, t)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
