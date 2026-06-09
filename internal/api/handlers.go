@@ -66,6 +66,30 @@ func (s *Server) handleCampaignOpens(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
+// handleCampaignClicks serves metric #2 (click rate + CTOR) for one campaign.
+// Path: /api/campaigns/{id}/clicks. Query param include_optin=true allows
+// requesting an optin campaign (excluded by default).
+func (s *Server) handleCampaignClicks(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(w, "invalid campaign id", http.StatusBadRequest)
+		return
+	}
+	includeOptin := r.URL.Query().Get("include_optin") == "true"
+
+	m, err := s.db.CampaignClickMetrics(r.Context(), id, includeOptin)
+	if err != nil {
+		if errors.Is(err, db.ErrCampaignNotFound) {
+			http.Error(w, "campaign not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, m)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
