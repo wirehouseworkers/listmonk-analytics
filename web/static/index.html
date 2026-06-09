@@ -4,12 +4,62 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>listmonk analytics</title>
-  <style>
-    body { font-family: system-ui, sans-serif; padding: 2rem; color: #333; }
-  </style>
+  <!-- Named fonts load when online; the CSS fallback chain is all sans-serif /
+       monospace, so the UI never renders a serif face offline. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <h1>listmonk-analytics</h1>
-  <p>Dashboard coming soon.</p>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">listmonk</span>
+      <span class="brand-sub">analytics</span>
+    </div>
+    <nav class="nav">
+      <a class="nav-item is-active" href="/">Overview</a>
+    </nav>
+    <div class="topbar-meta" id="topbar-meta"></div>
+  </header>
+
+  <main class="wrap">
+    <!-- Tracking-off / availability banner (hidden unless relevant) -->
+    <div class="banner" id="banner" hidden></div>
+
+    <section class="panel" aria-label="Overview KPIs">
+      <h2 class="panel-title">Overview</h2>
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-loading" id="kpi-loading">Loading metrics…</div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Campaign comparison">
+      <div class="panel-head">
+        <h2 class="panel-title">Campaigns</h2>
+        <span class="panel-note" id="table-note"></span>
+      </div>
+
+      <div class="state" id="table-loading">Loading campaigns…</div>
+      <div class="state" id="table-empty" hidden>No campaigns found.</div>
+      <div class="state state-error" id="table-error" hidden></div>
+
+      <div class="table-scroll" id="table-wrap" hidden>
+        <table class="ctable" id="ctable">
+          <thead>
+            <tr id="ctable-head"></tr>
+          </thead>
+          <tbody id="ctable-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>Read-only · regular campaigns only · rates over <code>campaigns.sent</code></span>
+    </footer>
+  </main>
+
+  <script src="/js/app.js"></script>
 </body>
 </html>

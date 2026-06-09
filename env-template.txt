@@ -1,0 +1,1 @@
+DATABASE_URL=postgresql://analytics_ro:YOUR_READONLY_PASSWORD@acela.proxy.rlwy.net:56474/railway
