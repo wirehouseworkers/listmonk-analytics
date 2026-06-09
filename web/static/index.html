@@ -19,47 +19,111 @@
       <span class="brand-sub">analytics</span>
     </div>
     <nav class="nav">
-      <a class="nav-item is-active" href="/">Overview</a>
+      <a class="nav-item" id="nav-overview" href="#/">Overview</a>
     </nav>
     <div class="topbar-meta" id="topbar-meta"></div>
   </header>
 
   <main class="wrap">
-    <!-- Tracking-off / availability banner (hidden unless relevant) -->
-    <div class="banner" id="banner" hidden></div>
 
-    <section class="panel" aria-label="Overview KPIs">
-      <h2 class="panel-title">Overview</h2>
-      <div class="kpi-grid" id="kpi-grid">
-        <div class="kpi-loading" id="kpi-loading">Loading metrics…</div>
-      </div>
-    </section>
+    <!-- ===================== OVERVIEW VIEW ===================== -->
+    <div id="view-overview">
+      <!-- Tracking-off / availability banner (hidden unless relevant) -->
+      <div class="banner" id="banner" hidden></div>
 
-    <section class="panel" aria-label="Campaign comparison">
-      <div class="panel-head">
-        <h2 class="panel-title">Campaigns</h2>
-        <span class="panel-note" id="table-note"></span>
-      </div>
+      <section class="panel" aria-label="Overview KPIs">
+        <h2 class="panel-title">Overview</h2>
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-loading" id="kpi-loading">Loading metrics…</div>
+        </div>
+      </section>
 
-      <div class="state" id="table-loading">Loading campaigns…</div>
-      <div class="state" id="table-empty" hidden>No campaigns found.</div>
-      <div class="state state-error" id="table-error" hidden></div>
+      <section class="panel" aria-label="Campaign comparison">
+        <div class="panel-head">
+          <h2 class="panel-title">Campaigns</h2>
+          <span class="panel-note" id="table-note"></span>
+        </div>
 
-      <div class="table-scroll" id="table-wrap" hidden>
-        <table class="ctable" id="ctable">
-          <thead>
-            <tr id="ctable-head"></tr>
-          </thead>
-          <tbody id="ctable-body"></tbody>
-        </table>
-      </div>
-    </section>
+        <div class="state" id="table-loading">Loading campaigns…</div>
+        <div class="state" id="table-empty" hidden>No campaigns found.</div>
+        <div class="state state-error" id="table-error" hidden></div>
+
+        <div class="table-scroll" id="table-wrap" hidden>
+          <table class="ctable" id="ctable">
+            <thead>
+              <tr id="ctable-head"></tr>
+            </thead>
+            <tbody id="ctable-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ===================== DETAIL VIEW ====================== -->
+    <div id="view-detail" hidden>
+      <a class="backlink" id="back-link" href="#/">← Overview</a>
+
+      <div class="banner" id="detail-banner" hidden></div>
+
+      <section class="panel" aria-label="Campaign detail">
+        <div class="detail-head">
+          <h2 class="panel-title" id="detail-name">Campaign</h2>
+          <span class="detail-meta" id="detail-meta"></span>
+        </div>
+
+        <div class="state" id="detail-loading">Loading campaign…</div>
+        <div class="state state-error" id="detail-error" hidden></div>
+
+        <div id="detail-body" hidden>
+          <div class="kpi-grid" id="detail-headline"></div>
+          <h3 class="subhead">Diagnostics — drill-down</h3>
+          <div class="kpi-grid" id="detail-diag"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="curve-panel" hidden aria-label="Engagement curve">
+        <div class="panel-head">
+          <h2 class="panel-title">Engagement curve</h2>
+          <span class="panel-note" id="curve-note"></span>
+        </div>
+        <div class="state" id="curve-empty" hidden></div>
+        <div class="chart-wrap" id="curve-wrap" hidden>
+          <canvas id="curve-canvas"></canvas>
+        </div>
+      </section>
+
+      <section class="panel" id="links-panel" hidden aria-label="Links clicked">
+        <div class="panel-head">
+          <h2 class="panel-title">Links clicked</h2>
+          <span class="panel-note" id="links-note"></span>
+        </div>
+        <div class="state" id="links-empty" hidden></div>
+        <div class="table-scroll" id="links-wrap" hidden>
+          <table class="ctable">
+            <thead>
+              <tr>
+                <th>Destination URL</th>
+                <th class="num">Total clicks</th>
+                <th class="num">Unique clicks</th>
+              </tr>
+            </thead>
+            <tbody id="links-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel" id="bounce-panel" hidden aria-label="Bounces and complaints">
+        <h2 class="panel-title">Bounces &amp; complaints</h2>
+        <div class="kpi-grid" id="bounce-kpis"></div>
+      </section>
+    </div>
 
     <footer class="foot">
       <span>Read-only · regular campaigns only · rates over <code>campaigns.sent</code></span>
     </footer>
   </main>
 
+  <script src="/vendor/chart.min.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

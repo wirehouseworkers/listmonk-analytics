@@ -1,14 +1,16 @@
-/* listmonk-analytics — dashboard shell + overview (S12)
+/* listmonk-analytics — dashboard (S12 overview + S13 campaign detail)
  *
  * Data-first vanilla JS. No build step, no framework, no storage APIs.
- * Wires the overview to GET /api/campaigns (the S04 comparison endpoint),
- * computes top-line KPIs, and renders a sortable campaign table.
+ * Hash routing: "#/"        → overview (GET /api/campaigns)
+ *               "#/c/{id}"  → campaign detail, wiring the per-campaign
+ *                             endpoints /opens /clicks /links /curve /bounces.
  *
  * Correctness notes mirrored from the backend:
  *  - Rates use campaigns.sent as the denominator; sent = 0 → "—".
  *  - Headline open/click use UNIQUE counts. When individual tracking is off,
  *    unique counts are unavailable; we fall back to TOTAL counts, labelled,
  *    rather than showing blanks or a misleading 0%.
+ *  - Complaints are shown separately from soft/hard bounces, never merged.
  */
 (function () {
   'use strict';
@@ -17,11 +19,18 @@
   var nf = new Intl.NumberFormat('en-US');
   function fmtInt(n) { return (n === null || n === undefined) ? '—' : nf.format(n); }
   function fmtPct(r) { return (r === null || r === undefined) ? '—' : (r * 100).toFixed(2) + '%'; }
+  function fmtRatio(r) { return (r === null || r === undefined) ? '—' : r.toFixed(2) + '×'; }
   function fmtDate(s) {
     if (!s) return '—';
     var d = new Date(s);
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+  function fmtDateTime(s) {
+    if (!s) return '—';
+    var d = new Date(s);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   }
   function sum(rows, key) {
     var t = 0;
@@ -33,32 +42,49 @@
   }
   function el(id) { return document.getElementById(id); }
 
-  // ---- load ----
-  fetch('/api/campaigns', { headers: { 'Accept': 'application/json' } })
-    .then(function (res) {
+  function fetchJSON(url) {
+    return fetch(url, { headers: { 'Accept': 'application/json' } }).then(function (res) {
+      if (res.status === 404) { var e = new Error('not found'); e.notFound = true; throw e; }
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
-    })
-    .then(function (data) {
-      var rows = (data && data.campaigns) || [];
-      render(rows);
-    })
-    .catch(function (err) {
-      showError('Could not load campaigns: ' + err.message);
     });
-
-  function showError(msg) {
-    el('kpi-loading').textContent = 'Metrics unavailable.';
-    el('table-loading').hidden = true;
-    var e = el('table-error');
-    e.hidden = false;
-    e.textContent = msg;
   }
 
-  // ---- aggregate availability detection ----
-  // Unique metrics are "unavailable" when no campaign carries a unique count
-  // (campaign_views/links absent) OR when totals exist but every unique count
-  // is zero — the signature of individual tracking being off.
+  // Build a kpi card element (shared by overview and detail).
+  function card(label, value, sub, subClass, variant) {
+    var d = document.createElement('div');
+    d.className = 'kpi' + (variant ? ' ' + variant : '');
+    var l = document.createElement('div'); l.className = 'kpi-label'; l.textContent = label;
+    var v = document.createElement('div');
+    v.className = 'kpi-value' + (value === '—' ? ' is-muted' : '');
+    v.textContent = value;
+    var s = document.createElement('div'); s.className = 'kpi-sub' + (subClass ? ' ' + subClass : ''); s.textContent = sub;
+    d.appendChild(l); d.appendChild(v); d.appendChild(s);
+    return d;
+  }
+
+  // =====================================================================
+  //  OVERVIEW
+  // =====================================================================
+  var overviewRows = [];      // cached campaign rows, also used to enrich detail
+  var overviewMeta = '';      // topbar meta string for the overview
+  var overviewLoaded = false;
+
+  fetchJSON('/api/campaigns')
+    .then(function (data) {
+      overviewRows = (data && data.campaigns) || [];
+      overviewLoaded = true;
+      renderOverview(overviewRows);
+      route(); // re-route now that data exists (handles deep links)
+    })
+    .catch(function (err) {
+      el('kpi-loading').textContent = 'Metrics unavailable.';
+      el('table-loading').hidden = true;
+      var e = el('table-error');
+      e.hidden = false;
+      e.textContent = 'Could not load campaigns: ' + err.message;
+    });
+
   function uniqueUnavailable(rows, uniqueKey, totalKey) {
     var allNull = true, sumU = 0, sumT = 0;
     for (var i = 0; i < rows.length; i++) {
@@ -69,14 +95,12 @@
     return sumT > 0 && sumU === 0;
   }
 
-  function render(rows) {
+  function renderOverview(rows) {
     var sent = sum(rows, 'sent');
-
     var openUnavail = uniqueUnavailable(rows, 'unique_opens', 'total_opens');
     var clickUnavail = uniqueUnavailable(rows, 'unique_clicks', 'total_clicks');
     var bouncesNull = rows.length > 0 && rows.every(function (r) { return r.bounces === null || r.bounces === undefined; });
 
-    // Numerators: unique when available, else total (labelled).
     var openNum = sum(rows, openUnavail ? 'total_opens' : 'unique_opens');
     var clickNum = sum(rows, clickUnavail ? 'total_clicks' : 'unique_clicks');
     var bounceNum = sum(rows, 'bounces');
@@ -87,10 +111,9 @@
     var bounceRate = (sent > 0 && !bouncesNull) ? bounceNum / sent : null;
     var complaintRate = (sent > 0 && !bouncesNull) ? complaintNum / sent : null;
 
-    renderBanner(openUnavail || clickUnavail);
-    renderKPIs({
-      count: rows.length,
-      sent: sent,
+    renderBanner('banner', openUnavail || clickUnavail);
+    renderOverviewKPIs({
+      count: rows.length, sent: sent,
       openRate: openRate, openUnavail: openUnavail, openNum: openNum,
       clickRate: clickRate, clickUnavail: clickUnavail, clickNum: clickNum,
       bounceRate: bounceRate, complaintRate: complaintRate,
@@ -98,58 +121,38 @@
     });
     renderTable(rows, { openUnavail: openUnavail, clickUnavail: clickUnavail });
 
-    el('topbar-meta').textContent = fmtInt(rows.length) + ' campaigns · ' + fmtInt(sent) + ' sent';
+    overviewMeta = fmtInt(rows.length) + ' campaigns · ' + fmtInt(sent) + ' sent';
   }
 
-  function renderBanner(trackingOff) {
-    var b = el('banner');
+  function renderBanner(id, trackingOff) {
+    var b = el(id);
     if (!trackingOff) { b.hidden = true; return; }
     b.hidden = false;
     b.innerHTML = '<strong>Individual tracking appears to be off.</strong> ' +
-      'Unique open/click metrics are unavailable, so rates below are based on ' +
+      'Unique open/click metrics are unavailable, so figures shown are based on ' +
       'total events (every open/click counted), not unique subscribers.';
   }
 
-  function renderKPIs(k) {
+  function renderOverviewKPIs(k) {
     var openLabel = k.openUnavail ? 'Open rate (total)' : 'Open rate';
     var clickLabel = k.clickUnavail ? 'Click rate (total)' : 'Click rate';
-    var openSub = k.openUnavail
-      ? 'unique unavailable — total opens ' + fmtInt(k.openNum)
-      : 'unique opens ' + fmtInt(k.openNum);
-    var clickSub = k.clickUnavail
-      ? 'unique unavailable — total clicks ' + fmtInt(k.clickNum)
-      : 'unique clicks ' + fmtInt(k.clickNum);
+    var openSub = k.openUnavail ? 'unique unavailable — total opens ' + fmtInt(k.openNum) : 'unique opens ' + fmtInt(k.openNum);
+    var clickSub = k.clickUnavail ? 'unique unavailable — total clicks ' + fmtInt(k.clickNum) : 'unique clicks ' + fmtInt(k.clickNum);
 
     var cards = [
-      card('Campaigns', fmtInt(k.count), 'regular, optin excluded', '', false),
-      card('Total sent', fmtInt(k.sent), 'messages delivered', '', false),
-      card(openLabel, fmtPct(k.openRate), openSub, '', true),
-      card(clickLabel, fmtPct(k.clickRate), clickSub, '', true),
-      card('Bounce rate',
-        k.bouncesNull ? '—' : fmtPct(k.bounceRate),
-        k.bouncesNull ? 'bounces unavailable' : 'soft + hard · ' + fmtInt(k.bounceNum),
-        'warn', false),
-      card('Complaint rate',
-        k.bouncesNull ? '—' : fmtPct(k.complaintRate),
+      card('Campaigns', fmtInt(k.count), 'regular, optin excluded', '', ''),
+      card('Total sent', fmtInt(k.sent), 'messages delivered', '', ''),
+      card(openLabel, fmtPct(k.openRate), openSub, '', 'accent'),
+      card(clickLabel, fmtPct(k.clickRate), clickSub, '', 'accent'),
+      card('Bounce rate', k.bouncesNull ? '—' : fmtPct(k.bounceRate),
+        k.bouncesNull ? 'bounces unavailable' : 'soft + hard · ' + fmtInt(k.bounceNum), 'warn', ''),
+      card('Complaint rate', k.bouncesNull ? '—' : fmtPct(k.complaintRate),
         k.bouncesNull ? 'kept separate from bounces' : 'spam reports · ' + fmtInt(k.complaintNum),
-        (k.complaintRate && k.complaintRate > 0) ? 'bad' : '', false)
+        (k.complaintRate && k.complaintRate > 0) ? 'bad' : '', '')
     ];
-
     var grid = el('kpi-grid');
     grid.innerHTML = '';
     cards.forEach(function (c) { grid.appendChild(c); });
-  }
-
-  function card(label, value, sub, subClass, accent) {
-    var d = document.createElement('div');
-    d.className = 'kpi' + (accent ? ' accent' : '');
-    var v = document.createElement('div');
-    v.className = 'kpi-value' + (value === '—' ? ' is-muted' : '');
-    v.textContent = value;
-    var l = document.createElement('div'); l.className = 'kpi-label'; l.textContent = label;
-    var s = document.createElement('div'); s.className = 'kpi-sub' + (subClass ? ' ' + subClass : ''); s.textContent = sub;
-    d.appendChild(l); d.appendChild(v); d.appendChild(s);
-    return d;
   }
 
   // ---- sortable campaign table ----
@@ -164,21 +167,13 @@
     { key: 'sent_date', label: 'Sent date', num: false }
   ];
   var sortState = { key: 'sent_date', dir: 'desc' };
-  var tableRows = [];
-  var tableFlags = {};
 
   function renderTable(rows, flags) {
-    tableRows = rows;
-    tableFlags = flags;
     el('table-loading').hidden = true;
-
     if (!rows.length) { el('table-empty').hidden = false; return; }
-
     el('table-wrap').hidden = false;
     el('table-note').textContent =
-      (flags.openUnavail ? 'open/' : '') + (flags.clickUnavail ? 'click ' : '') +
-      (flags.openUnavail || flags.clickUnavail ? 'rates are total-based' : 'unique-based rates');
-
+      (flags.openUnavail || flags.clickUnavail) ? 'rates are total-based' : 'unique-based rates · click a row for detail';
     buildHead();
     sortAndPaint();
   }
@@ -210,30 +205,25 @@
     });
   }
 
-  // cmpNonNull compares two present (non-null) values for the given key.
   function cmpNonNull(x, y, key) {
     if (key === 'sent_date') { x = new Date(x).getTime(); y = new Date(y).getTime(); }
-    if (typeof x === 'string') {
-      x = x.toLowerCase(); y = y.toLowerCase();
-    }
+    if (typeof x === 'string') { x = x.toLowerCase(); y = y.toLowerCase(); }
     return x < y ? -1 : (x > y ? 1 : 0);
   }
 
   function sortAndPaint() {
-    var rows = tableRows.slice();
+    var rows = overviewRows.slice();
     var key = sortState.key, dir = sortState.dir === 'asc' ? 1 : -1;
     rows.sort(function (a, b) {
       var x = a[key], y = b[key];
       var xn = (x === null || x === undefined), yn = (y === null || y === undefined);
-      // Nulls always sort last, independent of sort direction.
       if (xn && yn) return a.id < b.id ? -1 : 1;
-      if (xn) return 1;
+      if (xn) return 1;          // nulls always last, independent of direction
       if (yn) return -1;
       var c = cmpNonNull(x, y, key);
       if (c !== 0) return c * dir;
-      return a.id < b.id ? -1 : 1; // stable-ish tiebreak by id
+      return a.id < b.id ? -1 : 1;
     });
-
     var body = el('ctable-body');
     body.innerHTML = '';
     rows.forEach(function (r) { body.appendChild(rowEl(r)); });
@@ -241,6 +231,8 @@
 
   function rowEl(r) {
     var tr = document.createElement('tr');
+    tr.className = 'clickable';
+    tr.addEventListener('click', function () { location.hash = '#/c/' + r.id; });
 
     var name = document.createElement('td');
     name.className = 'name';
@@ -252,10 +244,7 @@
     tr.appendChild(name);
 
     var st = document.createElement('td');
-    var pill = document.createElement('span');
-    pill.className = 'pill ' + (r.status || '');
-    pill.textContent = r.status || '—';
-    st.appendChild(pill);
+    st.appendChild(statusPill(r.status));
     tr.appendChild(st);
 
     tr.appendChild(numCell(fmtInt(r.sent)));
@@ -268,8 +257,14 @@
     dt.textContent = fmtDate(r.sent_date);
     if (!r.sent_date) dt.className = 'dash';
     tr.appendChild(dt);
-
     return tr;
+  }
+
+  function statusPill(status) {
+    var pill = document.createElement('span');
+    pill.className = 'pill ' + (status || '');
+    pill.textContent = status || '—';
+    return pill;
   }
 
   function numCell(text) {
@@ -278,5 +273,277 @@
     if (text === '—') td.classList.add('dash');
     td.textContent = text;
     return td;
+  }
+
+  // =====================================================================
+  //  ROUTER
+  // =====================================================================
+  function currentRoute() {
+    var m = (location.hash || '').match(/^#\/c\/(\d+)/);
+    return m ? { view: 'detail', id: parseInt(m[1], 10) } : { view: 'overview' };
+  }
+
+  function route() {
+    var r = currentRoute();
+    if (r.view === 'detail') {
+      el('view-overview').hidden = true;
+      el('view-detail').hidden = false;
+      el('nav-overview').classList.remove('is-active');
+      window.scrollTo(0, 0);
+      loadDetail(r.id);
+    } else {
+      el('view-detail').hidden = true;
+      el('view-overview').hidden = false;
+      el('nav-overview').classList.add('is-active');
+      el('topbar-meta').textContent = overviewMeta;
+      destroyChart();
+      window.scrollTo(0, 0);
+    }
+  }
+  window.addEventListener('hashchange', route);
+  route(); // initial (overview data may still be loading; re-routed on load)
+
+  // =====================================================================
+  //  CAMPAIGN DETAIL
+  // =====================================================================
+  var detailReq = 0;       // guards against stale responses on fast navigation
+  var chart = null;
+
+  function destroyChart() {
+    if (chart) { chart.destroy(); chart = null; }
+  }
+
+  function cachedRow(id) {
+    for (var i = 0; i < overviewRows.length; i++) { if (overviewRows[i].id === id) return overviewRows[i]; }
+    return null;
+  }
+
+  function loadDetail(id) {
+    var token = ++detailReq;
+    destroyChart();
+    el('detail-error').hidden = true;
+    el('detail-body').hidden = true;
+    el('curve-panel').hidden = true;
+    el('links-panel').hidden = true;
+    el('bounce-panel').hidden = true;
+    el('detail-banner').hidden = true;
+    el('detail-loading').hidden = false;
+    el('detail-name').textContent = 'Campaign #' + id;
+    el('detail-meta').textContent = '';
+
+    Promise.all([
+      fetchJSON('/api/campaigns/' + id + '/opens'),
+      fetchJSON('/api/campaigns/' + id + '/clicks'),
+      fetchJSON('/api/campaigns/' + id + '/links'),
+      fetchJSON('/api/campaigns/' + id + '/curve'),
+      fetchJSON('/api/campaigns/' + id + '/bounces')
+    ]).then(function (res) {
+      if (token !== detailReq) return; // a newer navigation superseded this one
+      renderDetail(id, { opens: res[0], clicks: res[1], links: res[2], curve: res[3], bounces: res[4] });
+    }).catch(function (err) {
+      if (token !== detailReq) return;
+      el('detail-loading').hidden = true;
+      var e = el('detail-error');
+      e.hidden = false;
+      e.textContent = err.notFound
+        ? 'Campaign not found (it may be an opt-in campaign, which is excluded, or it does not exist).'
+        : 'Could not load campaign: ' + err.message;
+    });
+  }
+
+  function renderDetail(id, d) {
+    el('detail-loading').hidden = true;
+
+    var opens = d.opens, clicks = d.clicks;
+    var trackingOff = opens.individual_tracking === false;
+
+    // Header + meta (enriched from the cached overview row when available).
+    el('detail-name').textContent = opens.name || ('Campaign #' + id);
+    var meta = el('detail-meta');
+    meta.innerHTML = '';
+    var row = cachedRow(id);
+    if (row && row.status) meta.appendChild(statusPill(row.status));
+    var bits = document.createElement('span');
+    var sentDate = d.curve.started_at || (row && row.sent_date) || null;
+    bits.textContent = fmtInt(opens.sent) + ' sent · ' + (sentDate ? fmtDateTime(sentDate) : 'not sent');
+    meta.appendChild(bits);
+    el('topbar-meta').textContent = (opens.name || ('#' + id));
+
+    renderBanner('detail-banner', trackingOff);
+    renderDetailKPIs(opens, clicks, trackingOff);
+    renderCurve(d.curve);
+    renderLinks(d.links, trackingOff);
+    renderBounceCards(d.bounces);
+
+    el('detail-body').hidden = false;
+    el('curve-panel').hidden = false;
+    el('links-panel').hidden = false;
+    el('bounce-panel').hidden = false;
+  }
+
+  function renderDetailKPIs(opens, clicks, trackingOff) {
+    // Headline tier: unique rates (or labelled total fallback) + CTOR.
+    var openLabel = trackingOff ? 'Open rate (total)' : 'Open rate';
+    var clickLabel = trackingOff ? 'Click rate (total)' : 'Click rate';
+
+    var openRate = opens.open_rate;
+    var clickRate = clicks.click_rate;
+    var openHeadlineSub, clickHeadlineSub;
+    if (trackingOff) {
+      // Unique unavailable: derive a total-based rate so the card is not blank.
+      openRate = (opens.sent > 0 && opens.total_opens != null) ? opens.total_opens / opens.sent : null;
+      clickRate = (clicks.sent > 0 && clicks.total_clicks != null) ? clicks.total_clicks / clicks.sent : null;
+      openHeadlineSub = 'unique unavailable — total opens ' + fmtInt(opens.total_opens);
+      clickHeadlineSub = 'unique unavailable — total clicks ' + fmtInt(clicks.total_clicks);
+    } else {
+      openHeadlineSub = 'unique opens ' + fmtInt(opens.unique_opens);
+      clickHeadlineSub = 'unique clicks ' + fmtInt(clicks.unique_clicks);
+    }
+
+    var headline = [
+      card(openLabel, fmtPct(openRate), openHeadlineSub, '', 'accent'),
+      card(clickLabel, fmtPct(clickRate), clickHeadlineSub, '', 'accent'),
+      card('CTOR', fmtPct(clicks.ctor),
+        trackingOff ? 'requires individual tracking' : 'unique clicks ÷ unique opens', '', 'accent')
+    ];
+    var hg = el('detail-headline');
+    hg.innerHTML = '';
+    headline.forEach(function (c) { hg.appendChild(c); });
+
+    // Diagnostic tier (drill-down): totals + ratios.
+    var diag = [
+      card('Total opens', fmtInt(opens.total_opens), 're-opens included', '', 'diag'),
+      card('Open ratio', fmtRatio(opens.open_ratio),
+        trackingOff ? 'unavailable without tracking' : 'total ÷ unique opens', '', 'diag'),
+      card('Total clicks', fmtInt(clicks.total_clicks), 'all click events', '', 'diag')
+    ];
+    var dg = el('detail-diag');
+    dg.innerHTML = '';
+    diag.forEach(function (c) { dg.appendChild(c); });
+  }
+
+  function bucketLabel(b) {
+    var h = b.hours_since_send;
+    if (b.width_hours === 24) return '+' + Math.round(h / 24) + 'd';
+    return '+' + h + 'h';
+  }
+
+  function renderCurve(curve) {
+    var note = el('curve-note');
+    var empty = el('curve-empty');
+    var wrap = el('curve-wrap');
+    destroyChart();
+    empty.hidden = true;
+    wrap.hidden = true;
+    note.textContent = '';
+
+    var buckets = (curve && curve.buckets) || [];
+
+    if (!curve.started_at) {
+      empty.hidden = false;
+      empty.textContent = curve.note || 'Campaign not yet sent — no engagement curve.';
+      return;
+    }
+    if (!buckets.length) {
+      empty.hidden = false;
+      empty.textContent = 'No opens or clicks recorded yet for this campaign.';
+      return;
+    }
+
+    note.textContent = 'since ' + fmtDateTime(curve.started_at) +
+      ' · ' + fmtInt(curve.total_opens) + ' opens · ' + fmtInt(curve.total_clicks) + ' clicks';
+
+    var labels = buckets.map(bucketLabel);
+    var opens = buckets.map(function (b) { return b.opens; });
+    var clicks = buckets.map(function (b) { return b.clicks; });
+
+    wrap.hidden = false;
+    var ctx = el('curve-canvas').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Opens', data: opens, yAxisID: 'y',
+            borderColor: '#4338ca', backgroundColor: 'rgba(67,56,202,0.10)',
+            fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+          },
+          {
+            label: 'Clicks', data: clicks, yAxisID: 'y1',
+            borderColor: '#0f766e', backgroundColor: 'rgba(15,118,110,0.10)',
+            fill: false, tension: 0.3, pointRadius: 2, borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top', align: 'end' } },
+        scales: {
+          x: { title: { display: true, text: 'time since send' }, grid: { display: false } },
+          y: { type: 'linear', position: 'left', beginAtZero: true, title: { display: true, text: 'opens' } },
+          y1: {
+            type: 'linear', position: 'right', beginAtZero: true,
+            title: { display: true, text: 'clicks' }, grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+  }
+
+  function renderLinks(links, trackingOff) {
+    var note = el('links-note');
+    var empty = el('links-empty');
+    var wrap = el('links-wrap');
+    var body = el('links-body');
+    body.innerHTML = '';
+    empty.hidden = true;
+    wrap.hidden = true;
+
+    var rows = (links && links.links) || [];
+    note.textContent = trackingOff ? 'unique per link unavailable — tracking off' : '';
+
+    if (!rows.length) {
+      empty.hidden = false;
+      empty.textContent = links.note || 'No links were clicked in this campaign.';
+      return;
+    }
+
+    wrap.hidden = false;
+    rows.forEach(function (l) {
+      var tr = document.createElement('tr');
+      var u = document.createElement('td');
+      u.className = 'links-url';
+      u.textContent = l.url;
+      tr.appendChild(u);
+      tr.appendChild(numCell(fmtInt(l.total_clicks)));
+      tr.appendChild(numCell(fmtInt(l.unique_clicks)));
+      body.appendChild(tr);
+    });
+  }
+
+  function renderBounceCards(b) {
+    var grid = el('bounce-kpis');
+    grid.innerHTML = '';
+    if (b.has_bounces === false) {
+      grid.appendChild(card('Bounces', '—', b.note || 'bounce tracking unavailable', '', ''));
+      return;
+    }
+    var cards = [
+      card('Bounce rate', fmtPct(b.bounce_rate),
+        'soft ' + fmtInt(b.soft_bounces) + ' · hard ' + fmtInt(b.hard_bounces) + ' = ' + fmtInt(b.bounces),
+        'warn', ''),
+      card('Complaint rate', fmtPct(b.complaint_rate),
+        fmtInt(b.complaints) + ' spam reports · separate from bounces',
+        (b.complaint_rate && b.complaint_rate > 0) ? 'bad' : '', '')
+    ];
+    cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  // Keep no-serif rule inside the canvas too.
+  if (window.Chart) {
+    Chart.defaults.font.family = "'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+    Chart.defaults.color = '#6b7280';
   }
 })();
