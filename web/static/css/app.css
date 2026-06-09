@@ -269,3 +269,11 @@ html, body {
   word-break: break-all;
   max-width: 640px;
 }
+
+/* ---- Lists view (S14) ---- */
+.ctable .rule {
+  font-family: var(--font-mono);
+  font-size: 0.79rem;
+  color: var(--muted);
+  max-width: 380px;
+}

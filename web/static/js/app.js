@@ -279,20 +279,36 @@
   //  ROUTER
   // =====================================================================
   function currentRoute() {
-    var m = (location.hash || '').match(/^#\/c\/(\d+)/);
-    return m ? { view: 'detail', id: parseInt(m[1], 10) } : { view: 'overview' };
+    var h = location.hash || '';
+    var m = h.match(/^#\/c\/(\d+)/);
+    if (m) return { view: 'detail', id: parseInt(m[1], 10) };
+    if (h === '#/lists') return { view: 'lists' };
+    return { view: 'overview' };
   }
 
   function route() {
     var r = currentRoute();
+    el('nav-overview').classList.remove('is-active');
+    el('nav-lists').classList.remove('is-active');
+
     if (r.view === 'detail') {
       el('view-overview').hidden = true;
+      el('view-lists').hidden = true;
       el('view-detail').hidden = false;
-      el('nav-overview').classList.remove('is-active');
       window.scrollTo(0, 0);
       loadDetail(r.id);
+    } else if (r.view === 'lists') {
+      el('view-overview').hidden = true;
+      el('view-detail').hidden = true;
+      el('view-lists').hidden = false;
+      el('nav-lists').classList.add('is-active');
+      el('topbar-meta').textContent = '';
+      destroyChart();
+      window.scrollTo(0, 0);
+      loadListsView();
     } else {
       el('view-detail').hidden = true;
+      el('view-lists').hidden = true;
       el('view-overview').hidden = false;
       el('nav-overview').classList.add('is-active');
       el('topbar-meta').textContent = overviewMeta;
@@ -539,6 +555,158 @@
         (b.complaint_rate && b.complaint_rate > 0) ? 'bad' : '', '')
     ];
     cards.forEach(function (c) { grid.appendChild(c); });
+  }
+
+  // =====================================================================
+  //  LISTS VIEW
+  // =====================================================================
+  var listsChart = null;
+  var listsLoaded = false;
+
+  function destroyListsChart() {
+    if (listsChart) { listsChart.destroy(); listsChart = null; }
+  }
+
+  function loadListsView() {
+    if (listsLoaded) return;
+
+    el('lists-loading').hidden = false;
+    el('lists-empty').hidden = true;
+    el('lists-wrap').hidden = true;
+    el('growth-loading').hidden = false;
+    el('growth-empty').hidden = true;
+    el('growth-wrap').hidden = true;
+    el('growth-note').textContent = '';
+    el('lists-note').textContent = '';
+
+    Promise.all([
+      fetchJSON('/api/lists'),
+      fetchJSON('/api/subscribers/growth')
+    ]).then(function (res) {
+      renderListsTable(res[0]);
+      renderGrowthChart(res[1]);
+      listsLoaded = true;
+    }).catch(function (err) {
+      el('lists-loading').hidden = true;
+      el('growth-loading').hidden = true;
+      var msg = 'Could not load data: ' + err.message;
+      el('lists-empty').hidden = false;
+      el('lists-empty').textContent = msg;
+      el('growth-empty').hidden = false;
+      el('growth-empty').textContent = msg;
+    });
+  }
+
+  function renderListsTable(data) {
+    el('lists-loading').hidden = true;
+    var lists = (data && data.lists) || [];
+
+    if (!data.has_subscriber_lists) {
+      el('lists-empty').hidden = false;
+      el('lists-empty').textContent = data.note || 'Per-list counts unavailable.';
+      return;
+    }
+    if (!lists.length) {
+      el('lists-empty').hidden = false;
+      el('lists-empty').textContent = 'No lists found.';
+      return;
+    }
+
+    el('lists-note').textContent = fmtInt(lists.length) + ' lists';
+    el('lists-wrap').hidden = false;
+    var body = el('lists-body');
+    body.innerHTML = '';
+    lists.forEach(function (l) {
+      var tr = document.createElement('tr');
+
+      var name = document.createElement('td');
+      name.className = 'name';
+      name.textContent = l.name || '(untitled)';
+      var sub = document.createElement('span');
+      sub.className = 'sub';
+      sub.textContent = '#' + l.list_id;
+      name.appendChild(sub);
+      tr.appendChild(name);
+
+      var st = document.createElement('td');
+      var sPill = document.createElement('span');
+      sPill.className = 'pill' + (l.status === 'active' ? ' finished' : '');
+      sPill.textContent = l.status || '—';
+      st.appendChild(sPill);
+      tr.appendChild(st);
+
+      var typ = document.createElement('td');
+      var tPill = document.createElement('span');
+      tPill.className = 'pill';
+      tPill.textContent = l.type || '—';
+      typ.appendChild(tPill);
+      tr.appendChild(typ);
+
+      var opt = document.createElement('td');
+      var oPill = document.createElement('span');
+      oPill.className = 'pill';
+      oPill.textContent = l.optin || '—';
+      opt.appendChild(oPill);
+      tr.appendChild(opt);
+
+      tr.appendChild(numCell(fmtInt(l.active_subscribers)));
+      tr.appendChild(numCell(fmtInt(l.total_subscriptions)));
+
+      var rule = document.createElement('td');
+      rule.className = 'rule';
+      rule.textContent = l.active_rule;
+      tr.appendChild(rule);
+
+      body.appendChild(tr);
+    });
+  }
+
+  function renderGrowthChart(g) {
+    el('growth-loading').hidden = true;
+    var buckets = (g && g.buckets) || [];
+    destroyListsChart();
+
+    if (!buckets.length) {
+      el('growth-empty').hidden = false;
+      el('growth-empty').textContent = 'No subscriber growth data available.';
+      return;
+    }
+
+    el('growth-note').textContent =
+      (g.interval || 'day') + 'ly · ' + fmtInt(g.total) + ' total subscribers';
+    el('growth-wrap').hidden = false;
+
+    var labels = buckets.map(function (b) {
+      var d = new Date(b.period);
+      if (isNaN(d.getTime())) return b.period;
+      return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    });
+    var counts = buckets.map(function (b) { return b.new_subscribers; });
+
+    var ctx = el('growth-canvas').getContext('2d');
+    listsChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'New subscribers', data: counts, yAxisID: 'y',
+            borderColor: '#4338ca', backgroundColor: 'rgba(67,56,202,0.10)',
+            fill: true, tension: 0.3, pointRadius: 2, borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top', align: 'end' } },
+        scales: {
+          x: { title: { display: true, text: 'date' }, grid: { display: false } },
+          y: { type: 'linear', position: 'left', beginAtZero: true,
+               title: { display: true, text: 'new subscribers' } }
+        }
+      }
+    });
   }
 
   // Keep no-serif rule inside the canvas too.

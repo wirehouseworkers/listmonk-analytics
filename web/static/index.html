@@ -20,6 +20,7 @@
     </div>
     <nav class="nav">
       <a class="nav-item" id="nav-overview" href="#/">Overview</a>
+      <a class="nav-item" id="nav-lists" href="#/lists">Lists</a>
     </nav>
     <div class="topbar-meta" id="topbar-meta"></div>
   </header>
@@ -116,6 +117,48 @@
         <h2 class="panel-title">Bounces &amp; complaints</h2>
         <div class="kpi-grid" id="bounce-kpis"></div>
       </section>
+    </div>
+
+    <!-- ===================== LISTS VIEW ====================== -->
+    <div id="view-lists" hidden>
+
+      <section class="panel" aria-label="Subscriber growth">
+        <div class="panel-head">
+          <h2 class="panel-title">Subscriber growth</h2>
+          <span class="panel-note" id="growth-note"></span>
+        </div>
+        <div class="state" id="growth-loading">Loading growth data…</div>
+        <div class="state" id="growth-empty" hidden></div>
+        <div class="chart-wrap" id="growth-wrap" hidden>
+          <canvas id="growth-canvas"></canvas>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Lists">
+        <div class="panel-head">
+          <h2 class="panel-title">Lists</h2>
+          <span class="panel-note" id="lists-note"></span>
+        </div>
+        <div class="state" id="lists-loading">Loading lists…</div>
+        <div class="state" id="lists-empty" hidden></div>
+        <div class="table-scroll" id="lists-wrap" hidden>
+          <table class="ctable">
+            <thead>
+              <tr>
+                <th>List</th>
+                <th>Status</th>
+                <th>Type</th>
+                <th>Opt-in</th>
+                <th class="num">Active</th>
+                <th class="num">Total subs</th>
+                <th>Active rule</th>
+              </tr>
+            </thead>
+            <tbody id="lists-body"></tbody>
+          </table>
+        </div>
+      </section>
+
     </div>
 
     <footer class="foot">
