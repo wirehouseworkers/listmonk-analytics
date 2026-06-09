@@ -52,6 +52,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/campaigns/{id}/curve", s.withAuth(http.HandlerFunc(s.handleCampaignCurve)))
 	s.mux.Handle("GET /api/campaigns/{id}/bounces", s.withAuth(http.HandlerFunc(s.handleCampaignBounces)))
 	s.mux.Handle("GET /api/bounces/trend", s.withAuth(http.HandlerFunc(s.handleBounceTrend)))
+	s.mux.Handle("GET /api/subscribers/growth", s.withAuth(http.HandlerFunc(s.handleSubscriberGrowth)))
+	s.mux.Handle("GET /api/lists", s.withAuth(http.HandlerFunc(s.handleListActiveCounts)))
 
 	// Static shell — auth-gated when credentials are configured.
 	sub, _ := fs.Sub(s.static, "web/static")

@@ -176,6 +176,35 @@ func (s *Server) handleBounceTrend(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
+// handleSubscriberGrowth serves metric #7 growth: new subscribers per time
+// bucket. Path: /api/subscribers/growth. Query param interval=day|week
+// (default day).
+func (s *Server) handleSubscriberGrowth(w http.ResponseWriter, r *http.Request) {
+	g, err := s.db.SubscriberGrowth(r.Context(), r.URL.Query().Get("interval"))
+	if err != nil {
+		if errors.Is(err, db.ErrInvalidOption) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, g)
+}
+
+// handleListActiveCounts serves metric #7 per-list active counts, applying each
+// list's opt-in rule. Path: /api/lists.
+func (s *Server) handleListActiveCounts(w http.ResponseWriter, r *http.Request) {
+	c, err := s.db.ListActiveCounts(r.Context())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, c)
+}
+
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
