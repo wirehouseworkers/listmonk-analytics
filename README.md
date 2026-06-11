@@ -33,8 +33,8 @@ subscriber-level panels (engagement scoring, CTOR). Aggregate campaign analytics
 work either way.
 
 ---
-![alt text](listmonk-analytics-lists-a.PNG "Listmonk Analytics")
-![alt text](listmonk-analytics-b.PNG "Listmonk Analytics")
+![alt text](listmonmk-analytics-lists-a.PNG "Listmonk Analytics Lists")
+![alt text](listmonmk-analytics-subscribers.PNG "subscribers Page")
 ![alt text](listmonk-analytics-c.PNG "Listmonk Analytics")
 
 ---
