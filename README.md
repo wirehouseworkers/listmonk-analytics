@@ -33,7 +33,11 @@ subscriber-level panels (engagement scoring, CTOR). Aggregate campaign analytics
 work either way.
 
 ---
+![alt text](listmonk-analytics-a.PNG "Listmonk Analytics")
+![alt text](listmonk-analytics-b.PNG "Listmonk Analytics")
+![alt text](listmonk-analytics-c.PNG "Listmonk Analytics")
 
+---
 ## Read-only safety model
 
 The dashboard is physically incapable of modifying your data:
