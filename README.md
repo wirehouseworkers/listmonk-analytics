@@ -7,7 +7,9 @@ per-link breakdowns, subscriber engagement scoring, and deliverability trends.
 
 It modifies nothing in your listmonk install. It writes nothing. It is a
 companion service any listmonk operator can point at their database and run.
+---
 
+![alt text](listmonk-analytics-amain.PNG "Listmonk Analytics")
 ---
 
 ## Features
